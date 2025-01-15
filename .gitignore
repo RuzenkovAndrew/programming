@@ -1,0 +1,5 @@
+.cache/mozilla/firefox/*
+**/bin/**
+**/obj/**
+.vscode
+build/
