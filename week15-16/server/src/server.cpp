@@ -46,6 +46,7 @@ int main() {
     socklen_t client_addr_len = sizeof(client_addr);
     const int PORT = 8080;
     const int MAX_WORKERS = 5;
+    const int MAX_PASSWORD_LENGTH = 8; // Ограничение длины пароля
     std::vector<int> clients;
     std::vector<std::thread> workerThreads;
     std::mutex clients_mutex;
@@ -53,7 +54,8 @@ int main() {
     std::string found_password;
     std::string password;
     std::queue<int> availableLengths;
-    for (int i = 1; i <= 10; ++i) {
+    
+    for (int i = 1; i <= MAX_PASSWORD_LENGTH; ++i) {
         availableLengths.push(i);
     }
 
@@ -126,6 +128,14 @@ int main() {
                             close(client_socket);
                             break;
                         }
+                        // Проверка на максимальную длину
+                        if (currentLength > MAX_PASSWORD_LENGTH) {
+                            std::string close_message = "close";
+                            send(client_socket, close_message.c_str(), close_message.length(), 0);
+                            close(client_socket);
+                            break;
+                        }
+
                         message = targetMD5String + " " + std::to_string(currentLength);
                         send(client_socket, message.c_str(), message.length(), 0);
                         std::cout << "Воркер " << worker_count + 1 << " запросил следующую длину, выдаю:" << currentLength << std::endl;
@@ -195,3 +205,4 @@ void listen_socket(int socket_fd) {
         throw std::runtime_error("Не удалось начать прослушивание!");
     }
 }
+

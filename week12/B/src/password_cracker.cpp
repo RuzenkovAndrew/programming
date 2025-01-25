@@ -6,11 +6,15 @@
 #include <thread>
 #include <mutex>
 #include <spdlog/spdlog.h>
+#include <chrono>
+#include <atomic>
+#include <sstream>
+#include <iomanip>
+#include <cmath>
 
 using namespace std;
 
-const string password = "Qw3t";
-unsigned char targetMD5[MD5_DIGEST_LENGTH];
+atomic<bool> found(false);
 
 void computeMD5FromString(const string &str, unsigned char *result) {
     MD5((unsigned char *)str.c_str(), str.length(), result);
@@ -23,9 +27,6 @@ string md5ToString(unsigned char *md) {
     }
     return ss.str();
 }
-
-atomic<bool> found(false);
-atomic<long long> totalCombinations(0);
 
 void bruteForceMD5Thread(int threadId, const string &targetMD5, const string &chars, int len, long long startIdx, long long endIdx) {
     unsigned char result[MD5_DIGEST_LENGTH];
@@ -51,7 +52,7 @@ void bruteForceMD5Thread(int threadId, const string &targetMD5, const string &ch
     }
 }
 
-void bruteForceMD5(const string &targetMD5, int numThreads) {
+void bruteForceMD5(const string &targetMD5, int numThreads, const string &password) {
     const string chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
     int len = password.length();
     long long totalCombinationsCount = pow(chars.size(), len);
@@ -68,3 +69,4 @@ void bruteForceMD5(const string &targetMD5, int numThreads) {
         t.join();
     }
 }
+

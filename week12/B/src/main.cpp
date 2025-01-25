@@ -1,49 +1,22 @@
-#include <iostream>
-#include <string>
-#include <chrono>
-#include <spdlog/spdlog.h>
 #include "password_cracker.hpp"
+#include <iostream>
 
-using namespace std;
+int main() {
+    std::string targetPassword;
+    std::cout << "Введите пароль для подбора: ";
+    std::cin >> targetPassword;
 
-int main(int argc, char *argv[]) {
-    if (argc < 2) {
-        cerr << "Usage: " << argv[0] << " <threads>" << endl;
-        return 1;
+    // Вычисляем MD5 хэш для введенного пароля
+    unsigned char result[MD5_DIGEST_LENGTH];
+    computeMD5FromString(targetPassword, result);
+    std::string targetMD5 = md5ToString(result);
+
+    // Перебираем количество потоков от 1 до 10
+    for (int numThreads = 1; numThreads <= 10; ++numThreads) {
+        std::cout << "Запуск с " << numThreads << " потоками..." << std::endl;
+        bruteForceMD5(targetMD5, numThreads, targetPassword);
     }
-
-    int numThreads = 0;
-    string threadsArg = argv[1];
-
-    size_t pos = threadsArg.find("threads==");
-    if (pos != string::npos) {
-        try {
-            numThreads = stoi(threadsArg.substr(pos + 9));
-        } catch (const std::invalid_argument &e) {
-            cerr << "Invalid number of threads!" << endl;
-            return 1;
-        }
-    } else {
-        cerr << "Usage: " << argv[0] << " <threads==number>" << endl;
-        return 1;
-    }
-
-    if (numThreads <= 0) {
-        cerr << "Invalid number of threads!" << endl;
-        return 1;
-    }
-
-    auto startTime = chrono::high_resolution_clock::now();
-    computeMD5FromString(password, targetMD5);
-    string targetMD5String = md5ToString(targetMD5);
-
-    spdlog::info("Starting brute force for MD5: {}", targetMD5String);
-    bruteForceMD5(targetMD5String, numThreads);
-
-    auto endTime = chrono::high_resolution_clock::now();
-    chrono::duration<double> duration = endTime - startTime;
-
-    spdlog::info("Total execution time: {} seconds", duration.count());
 
     return 0;
 }
+
