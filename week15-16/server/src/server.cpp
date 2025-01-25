@@ -7,17 +7,17 @@
 #include <vector>
 #include <mutex>
 #include <stdexcept>
-#include <openssl/md5.h>
+#include <openssl/evp.h>
 #include <iomanip>
 #include <sstream>
 #include <atomic>
 #include <cmath>
 #include <queue>
-#include "server.hpp" // Added this line
 
 // --- Global Variables ---
 std::vector<std::string> message_history;
 std::mutex history_mutex;
+#define MD5_DIGEST_LENGTH 16
 
 // --- password_cracker.hpp ---
 extern unsigned char targetMD5[MD5_DIGEST_LENGTH];
@@ -28,7 +28,11 @@ std::string md5ToString(unsigned char *md);
 unsigned char targetMD5[MD5_DIGEST_LENGTH];
 
 void computeMD5FromString(const std::string &str, unsigned char *result) {
-    MD5((unsigned char *)str.c_str(), str.length(), result);
+    EVP_MD_CTX *mdctx = EVP_MD_CTX_new();
+    EVP_DigestInit_ex(mdctx, EVP_md5(), NULL);
+    EVP_DigestUpdate(mdctx, str.c_str(), str.length());
+    EVP_DigestFinal_ex(mdctx, result, NULL);
+    EVP_MD_CTX_free(mdctx);
 }
 
 std::string md5ToString(unsigned char *md) {
@@ -38,6 +42,11 @@ std::string md5ToString(unsigned char *md) {
     }
     return ss.str();
 }
+
+// --- Function Declarations ---
+void create_socket(int& socket_fd);
+void bind_socket(int socket_fd, sockaddr_in& server_addr);
+void listen_socket(int socket_fd);
 
 // --- Main Server ---
 int main() {
@@ -54,7 +63,7 @@ int main() {
     std::string found_password;
     std::string password;
     std::queue<int> availableLengths;
-    
+
     for (int i = 1; i <= MAX_PASSWORD_LENGTH; ++i) {
         availableLengths.push(i);
     }
@@ -145,12 +154,12 @@ int main() {
                         std::cout << "Пароль найден: " << found_password << std::endl;
                         
                         {
-                           std::lock_guard<std::mutex> guard(clients_mutex);
+                            std::lock_guard<std::mutex> guard(clients_mutex);
                             for (int client_socket : clients) {
-                                 std::string found_message = "Пароль найден всем спасибо";
+                                std::string found_message = "Пароль найден всем спасибо";
                                 send(client_socket, found_message.c_str(), found_message.length(), 0);
-                             }
-                         }
+                            }
+                        }
                         break;
                     } else if (message == "close") {
                         close(client_socket);
@@ -164,12 +173,12 @@ int main() {
         while (!found.load()) {
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
-         {
+        {
             std::lock_guard<std::mutex> guard(clients_mutex);
-           for (int client_socket : clients) {
-                  close(client_socket);
-           }
-         }
+            for (int client_socket : clients) {
+                close(client_socket);
+            }
+        }
 
         close(server_socket);
         std::cout << "Сервер завершает работу" << std::endl;
