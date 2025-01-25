@@ -4,15 +4,18 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
-#include <openssl/md5.h>
+#include <openssl/evp.h>
 #include <iomanip>
 #include <sstream>
 #include <atomic>
 #include <cmath>
 #include <chrono>
-#include <vector> // Added this line
+#include <vector>
 #include <future>
 #include <algorithm>
+
+// Определяем длину хеша MD5
+#define MD5_DIGEST_LENGTH 16
 
 // --- password_cracker.hpp ---
 extern unsigned char targetMD5[MD5_DIGEST_LENGTH];
@@ -28,7 +31,11 @@ std::atomic<bool> password_found(false);
 std::atomic<long long> totalCombinations(0);
 
 void computeMD5FromString(const std::string &str, unsigned char *result) {
-    MD5((unsigned char *)str.c_str(), str.length(), result);
+    EVP_MD_CTX *mdctx = EVP_MD_CTX_new();
+    EVP_DigestInit_ex(mdctx, EVP_md5(), NULL);
+    EVP_DigestUpdate(mdctx, str.c_str(), str.length());
+    EVP_DigestFinal_ex(mdctx, result, NULL);
+    EVP_MD_CTX_free(mdctx);
 }
 
 std::string md5ToString(unsigned char *md) {
@@ -45,8 +52,6 @@ void bruteForceMD5Thread(int threadId, const std::string &targetMD5, const std::
     }
     unsigned char result[MD5_DIGEST_LENGTH];
 
-    long long totalCombinationsCount = pow(chars.size(), len);
-    long long range = totalCombinationsCount / 1;
     for (long long index = startIdx; index < endIdx; ++index) {
         if (found.load() || password_found.load()) {
             return;
@@ -78,7 +83,7 @@ void bruteForceMD5Thread(int threadId, const std::string &targetMD5, const std::
         if (computedMD5 == targetMD5) {
             password_found.store(true);
             std::cout << "Thread " << threadId << ": Found password: " << currentStr << std::endl;
-           send(client_socket, currentStr.c_str(), currentStr.length(), 0);
+            send(client_socket, currentStr.c_str(), currentStr.length(), 0);
             return;
         }
     }
@@ -104,7 +109,7 @@ int main() {
     const int PORT = 8080;
     int numThreads = 0;
     std::atomic<bool> found(false);
-     std::atomic<bool> password_found(false);
+    std::atomic<bool> password_found(false);
 
     client_socket = socket(AF_INET, SOCK_STREAM, 0);
     if (client_socket == -1) {
@@ -141,46 +146,47 @@ int main() {
     }
     std::cout << "Воркер использует " << numThreads << " потоков." << std::endl;
 
-   while (!found.load() && !password_found.load()) {
+    while (!found.load() && !password_found.load()) {
         bruteForceMD5(targetMD5String, numThreads, len, client_socket, std::ref(found), std::ref(password_found));
         if (!found.load() && !password_found.load()) {
             std::string not_found = "not found";
             send(client_socket, not_found.c_str(), not_found.length(), 0);
 
             bytes_received = recv(client_socket, buffer, sizeof(buffer), 0);
-              if (bytes_received <= 0) {
-                   close(client_socket);
-                    std::cout << "воркер завершил работу" << std::endl;
-                    break;
-              }
+            if (bytes_received <= 0) {
+                close(client_socket);
+                std::cout << "воркер завершил работу" << std::endl;
+                break;
+            }
             buffer[bytes_received] = '\0';
             message = buffer;
-             if (message == "Пароль найден всем спасибо") {
-                 found.store(true);
-                  close(client_socket);
-                    std::cout<<"воркер завершил работу"<<std::endl;
-                  break;
-            } else if (message == "close"){
-                 close(client_socket);
-                    std::cout << "воркер завершил работу" << std::endl;
-                    break;
-            }else {
-                 std::stringstream ss(message);
-               ss>>targetMD5String>>len;
+            if (message == "Пароль найден всем спасибо") {
+                found.store(true);
+                close(client_socket);
+                std::cout << "воркер завершил работу" << std::endl;
+                break;
+            } else if (message == "close") {
+                close(client_socket);
+                std::cout << "воркер завершил работу" << std::endl;
+                break;
+            } else {
+                std::stringstream ss(message);
+                ss >> targetMD5String >> len;
             }
         }
     }
-   bytes_received = recv(client_socket, buffer, sizeof(buffer), 0);
+    bytes_received = recv(client_socket, buffer, sizeof(buffer), 0);
     if (bytes_received > 0) {
-         buffer[bytes_received] = '\0';
-         std::string close_message = buffer;
-          if(close_message == "close"){
-                close(client_socket);
-                std::cout<<"воркер завершил работу"<<std::endl;
-          }
-    } else if (bytes_received == 0){
-         close(client_socket);
-         std::cout<<"воркер завершил работу"<<std::endl;
+        buffer[bytes_received] = '\0';
+        std::string close_message = buffer;
+        if (close_message == "close") {
+            close(client_socket);
+            std::cout << "воркер завершил работу" << std::endl;
+        }
+    } else if (bytes_received == 0) {
+        close(client_socket);
+        std::cout << "воркер завершил работу" << std::endl;
     }
     return 0;
 }
+

@@ -6,6 +6,8 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 find_package(OpenSSL REQUIRED)
 find_package(Threads REQUIRED)
+include_directories(/usr/include/openssl)
+link_directories(/usr/lib/x84_64-linux-gnu)
 
 add_executable(client src/client.cpp)
 target_link_libraries(client OpenSSL::Crypto Threads::Threads)
