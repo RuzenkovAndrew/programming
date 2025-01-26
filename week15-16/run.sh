@@ -1,10 +1,10 @@
 #!/bin/bash
-#SBATCH --job-name=client-run
+#SBATCH --job-name=client-build
 #SBATCH --partition=banana
 #SBATCH --ntasks=1
 #SBATCH --nodes=1
 #SBATCH --exclusive
-#SBATCH --time=00:03:00  # Увеличили время, чтобы приложение успело отработать
+#SBATCH --time=00:05:00
 #SBATCH --array=0-4
 
-make -C /clusterfs/ruzenkov/week15-16/client run
+/clusterfs/ruzenkov/week15-16/client/build/client
