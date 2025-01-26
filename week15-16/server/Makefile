@@ -1,5 +1,5 @@
 CC = g++
-CFLAGS = -Wall -g -std=c++11 -lcrypto -lpthread
+CFLAGS = -Wall -g -std=c++11  -lpthread
 
 SERVER_SRC_DIR = src
 SERVER_EXE = server

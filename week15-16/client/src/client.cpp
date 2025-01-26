@@ -105,7 +105,7 @@ void bruteForceMD5(const std::string &targetMD5, int numThreads, int len, int cl
 // --- Main Client (Worker) ---
 int main() {
     int client_socket;
-    const char* SERVER_IP = "127.0.0.1";
+    const char* SERVER_IP = "192.168.1.1";
     const int PORT = 8080;
     int numThreads = 0;
     std::atomic<bool> found(false);
