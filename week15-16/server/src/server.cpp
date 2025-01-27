@@ -13,6 +13,9 @@
 #include <atomic>
 #include <cmath>
 #include <queue>
+#include <csignal>
+#include <cstdlib>
+#include <algorithm>
 
 // --- Global Variables ---
 std::vector<std::string> message_history;
@@ -48,6 +51,59 @@ void create_socket(int& socket_fd);
 void bind_socket(int socket_fd, sockaddr_in& server_addr);
 void listen_socket(int socket_fd);
 
+// --- Global Variables for Signal Handling ---
+int server_socket_global = -1;
+std::vector<int> clients_global;
+std::mutex clients_mutex_global;
+std::atomic<bool> server_running(true);
+
+
+void signalHandler(int signum) {
+    if (signum == SIGINT) {
+        std::cout << "Сервер получил сигнал SIGINT (Ctrl+C). Завершаем работу..." << std::endl;
+        server_running = false;
+
+        // 1. Находим PIDы воркеров
+        std::string pgrep_command = "pgrep client";
+        std::string pids_str = "";
+        FILE* pgrep_output = popen(pgrep_command.c_str(), "r");
+        if (pgrep_output) {
+            char buffer[128];
+            while (fgets(buffer, sizeof(buffer), pgrep_output) != nullptr) {
+                pids_str += buffer;
+            }
+            pclose(pgrep_output);
+        }
+
+        std::vector<int> worker_pids;
+        std::stringstream ss(pids_str);
+        int pid;
+        while (ss >> pid) {
+            worker_pids.push_back(pid);
+        }
+
+        // 2. Убиваем воркеров
+         for(int pid : worker_pids){
+           std::string kill_command = "kill " + std::to_string(pid);
+           system(kill_command.c_str());
+         }
+
+        // 3. Закрываем все сокеты
+        if (server_socket_global != -1) {
+            close(server_socket_global);
+        }
+        {
+             std::lock_guard<std::mutex> guard(clients_mutex_global);
+             for(int client_socket : clients_global) {
+               close(client_socket);
+            }
+        }
+         std::cout << "Сервер завершил работу." << std::endl;
+        exit(0); // Завершаем работу сервера
+    }
+}
+
+
 // --- Main Server ---
 int main() {
     int server_socket, client_socket;
@@ -67,12 +123,20 @@ int main() {
     for (int i = 1; i <= MAX_PASSWORD_LENGTH; ++i) {
         availableLengths.push(i);
     }
+    
+      // Устанавливаем обработчик сигнала SIGINT
+    struct sigaction sigIntHandler;
+    sigIntHandler.sa_handler = signalHandler;
+    sigemptyset(&sigIntHandler.sa_mask);
+    sigIntHandler.sa_flags = 0;
+    sigaction(SIGINT, &sigIntHandler, NULL);
 
     try {
         std::cout << "Введите пароль: ";
         std::cin >> password;
 
         create_socket(server_socket);
+        server_socket_global = server_socket;
 
         server_addr.sin_family = AF_INET;
         server_addr.sin_port = htons(PORT);
@@ -87,7 +151,7 @@ int main() {
         std::string targetMD5String = md5ToString(targetMD5);
 
         int worker_count = 0;
-        while (worker_count < MAX_WORKERS) {
+        while (worker_count < MAX_WORKERS && server_running.load()) {
             client_socket = accept(server_socket, (struct sockaddr *)&client_addr, &client_addr_len);
             if (client_socket == -1) {
                 if (worker_count > 0) {
@@ -99,8 +163,10 @@ int main() {
 
             {
                 std::lock_guard<std::mutex> guard(clients_mutex);
+                 clients_global.push_back(client_socket);
                 clients.push_back(client_socket);
             }
+
             int currentLength = 0;
             if (!availableLengths.empty()) {
                 currentLength = availableLengths.front();
@@ -170,17 +236,20 @@ int main() {
             worker_count++;
         }
 
-        while (!found.load()) {
+        while (!found.load() && server_running.load()) {
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
         {
             std::lock_guard<std::mutex> guard(clients_mutex);
-            for (int client_socket : clients) {
-                close(client_socket);
+             for (int client_socket : clients) {
+                 close(client_socket);
             }
+            clients.clear();
+
         }
 
-        close(server_socket);
+         close(server_socket);
+
         std::cout << "Сервер завершает работу" << std::endl;
     } catch (const std::runtime_error& e) {
         std::cerr << "Ошибка: " << e.what() << std::endl;
@@ -214,4 +283,3 @@ void listen_socket(int socket_fd) {
         throw std::runtime_error("Не удалось начать прослушивание!");
     }
 }
-

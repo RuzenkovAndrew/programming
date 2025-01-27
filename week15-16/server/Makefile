@@ -1,6 +1,5 @@
 CC = g++
-CFLAGS = -Wall -g -std=c++11  -lpthread
-
+CFLAGS = -Wall -g -std=c++11 -lpthread -lcrypto
 SERVER_SRC_DIR = src
 SERVER_EXE = server
 BUILD_DIR = build
@@ -13,7 +12,7 @@ $(BUILD_DIR):
 	@mkdir -p $(BUILD_DIR)
 
 $(BUILD_DIR)/$(SERVER_EXE): $(SERVER_SRC) $(BUILD_DIR)
-	$(CC) $(CFLAGS) $< -o $@
+	$(CC) $(CFLAGS) $(SERVER_SRC) -o $@
 
 run: $(BUILD_DIR)/$(SERVER_EXE)
 	@echo "Running server..."
